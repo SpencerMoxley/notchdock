@@ -8,11 +8,11 @@ private typealias MRMediaRemoteGetNowPlayingApplicationIsPlayingFn = @convention
 private typealias MRMediaRemoteSendCommandFn = @convention(c) (UInt32, AnyObject?) -> Bool
 private typealias MRMediaRemoteRegisterForNowPlayingNotificationsFn = @convention(c) (DispatchQueue) -> Void
 
-private let kMRPlay:          UInt32 = 0
-private let kMRPause:         UInt32 = 1
+private let kMRPlay:            UInt32 = 0
+private let kMRPause:           UInt32 = 1
 private let kMRTogglePlayPause: UInt32 = 2
-private let kMRNextTrack:     UInt32 = 4
-private let kMRPreviousTrack: UInt32 = 5
+private let kMRNextTrack:       UInt32 = 4
+private let kMRPreviousTrack:   UInt32 = 5
 
 enum MediaCommand {
     case play, pause, togglePlayPause, nextTrack, previousTrack
@@ -32,42 +32,59 @@ enum MediaCommand {
 
 @Observable
 final class MediaManager {
-    var title:    String?
-    var artist:   String?
-    var album:    String?
-    var artwork:  NSImage?
+    var title:     String?
+    var artist:    String?
+    var album:     String?
+    var artwork:   NSImage?
     var isPlaying: Bool = false
 
     private var handle: UnsafeMutableRawPointer?
     private var nowPlayingInfoObserver: NSObjectProtocol?
+    private var isPlayingObserver:      NSObjectProtocol?
 
-    // Lazily resolved function pointers
-    private var fnGetInfo:      MRMediaRemoteGetNowPlayingInfoFn?
-    private var fnIsPlaying:    MRMediaRemoteGetNowPlayingApplicationIsPlayingFn?
-    private var fnSendCommand:  MRMediaRemoteSendCommandFn?
-    private var fnRegister:     MRMediaRemoteRegisterForNowPlayingNotificationsFn?
+    private var fnGetInfo:    MRMediaRemoteGetNowPlayingInfoFn?
+    private var fnIsPlaying:  MRMediaRemoteGetNowPlayingApplicationIsPlayingFn?
+    private var fnSendCommand: MRMediaRemoteSendCommandFn?
+    private var fnRegister:   MRMediaRemoteRegisterForNowPlayingNotificationsFn?
 
     // MARK: - Lifecycle
 
     func startObserving() {
         loadFramework()
         fnRegister?(DispatchQueue.main)
+
+        // First fetch — may return empty if MediaRemote hasn't warmed up yet.
         refresh()
 
+        // Retry after a short delay; the first call often returns empty on launch
+        // even when a track is actively playing.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.refresh()
+        }
+
         let center = NotificationCenter.default
-        // kMRMediaRemoteNowPlayingInfoDidChangeNotification
-        let name = Notification.Name("kMRMediaRemoteNowPlayingInfoDidChangeNotification")
-        nowPlayingInfoObserver = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+
+        // Fires when track info changes (new track, metadata update, etc.)
+        let infoName = Notification.Name("kMRMediaRemoteNowPlayingInfoDidChangeNotification")
+        nowPlayingInfoObserver = center.addObserver(forName: infoName, object: nil, queue: .main) { [weak self] _ in
+            self?.refresh()
+        }
+
+        // Fires when playback starts or stops — also re-fetch info since
+        // the playing app may have changed.
+        let playingName = Notification.Name("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification")
+        isPlayingObserver = center.addObserver(forName: playingName, object: nil, queue: .main) { [weak self] _ in
             self?.refresh()
         }
     }
 
     func stopObserving() {
-        if let obs = nowPlayingInfoObserver {
-            NotificationCenter.default.removeObserver(obs)
-        }
-        if let handle { dlclose(handle) }
-        self.handle = nil
+        if let obs = nowPlayingInfoObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = isPlayingObserver      { NotificationCenter.default.removeObserver(obs) }
+        nowPlayingInfoObserver = nil
+        isPlayingObserver      = nil
+        if let h = handle { dlclose(h) }
+        handle = nil
     }
 
     func sendCommand(_ command: MediaCommand) {
@@ -82,10 +99,10 @@ final class MediaManager {
         handle = dlopen(path, RTLD_LAZY)
         guard let h = handle else { return }
 
-        fnGetInfo = unsafeBitCast(dlsym(h, "MRMediaRemoteGetNowPlayingInfo"), to: MRMediaRemoteGetNowPlayingInfoFn?.self)
-        fnIsPlaying = unsafeBitCast(dlsym(h, "MRMediaRemoteGetNowPlayingApplicationIsPlaying"), to: MRMediaRemoteGetNowPlayingApplicationIsPlayingFn?.self)
-        fnSendCommand = unsafeBitCast(dlsym(h, "MRMediaRemoteSendCommand"), to: MRMediaRemoteSendCommandFn?.self)
-        fnRegister = unsafeBitCast(dlsym(h, "MRMediaRemoteRegisterForNowPlayingNotifications"), to: MRMediaRemoteRegisterForNowPlayingNotificationsFn?.self)
+        fnGetInfo     = unsafeBitCast(dlsym(h, "MRMediaRemoteGetNowPlayingInfo"),                          to: MRMediaRemoteGetNowPlayingInfoFn?.self)
+        fnIsPlaying   = unsafeBitCast(dlsym(h, "MRMediaRemoteGetNowPlayingApplicationIsPlaying"),          to: MRMediaRemoteGetNowPlayingApplicationIsPlayingFn?.self)
+        fnSendCommand = unsafeBitCast(dlsym(h, "MRMediaRemoteSendCommand"),                               to: MRMediaRemoteSendCommandFn?.self)
+        fnRegister    = unsafeBitCast(dlsym(h, "MRMediaRemoteRegisterForNowPlayingNotifications"),        to: MRMediaRemoteRegisterForNowPlayingNotificationsFn?.self)
     }
 
     private func refresh() {
@@ -98,13 +115,12 @@ final class MediaManager {
     }
 
     private func updateNowPlaying(from info: [String: Any]) {
-        // Key names from MediaRemote reverse engineering
-        title  = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String
+        title  = info["kMRMediaRemoteNowPlayingInfoTitle"]  as? String
         artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String
-        album  = info["kMRMediaRemoteNowPlayingInfoAlbum"] as? String
+        album  = info["kMRMediaRemoteNowPlayingInfoAlbum"]  as? String
 
-        if let artworkData = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data {
-            artwork = NSImage(data: artworkData)
+        if let data = info["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data {
+            artwork = NSImage(data: data)
         } else {
             artwork = nil
         }

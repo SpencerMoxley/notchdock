@@ -3,11 +3,8 @@ import SwiftUI
 
 final class NotchWindowController: NSWindowController {
 
-    // Window is always this size — it never resizes on hover.
-    static let panelWidth:  CGFloat = 480
-    static let panelHeight: CGFloat = 182
-
-    // Visual pill size (used by CollapsedView)
+    static let panelWidth:      CGFloat = 480
+    static let panelHeight:     CGFloat = 182
     static let collapsedWidth:  CGFloat = 162
     static let collapsedHeight: CGFloat = 32
 
@@ -15,6 +12,28 @@ final class NotchWindowController: NSWindowController {
     private var collapseTask: DispatchWorkItem?
 
     let notchState = NotchState()
+
+    /// Custom NSView that lets clicks pass through the transparent areas when
+    /// the panel is collapsed, so menu-bar items are still reachable.
+    private final class PassthroughView: NSView {
+        var isExpanded = false
+
+        private let pillW = NotchWindowController.collapsedWidth
+        private let pillH = NotchWindowController.collapsedHeight
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            // When expanded, behave normally.
+            guard !isExpanded else { return super.hitTest(point) }
+            // When collapsed, only accept hits inside the pill.
+            // AppKit uses y-up; the pill sits at the TOP of the view frame.
+            let pillX = (bounds.width  - pillW) / 2
+            let pillY =  bounds.height - pillH        // top of view in y-up coords
+            let pillRect = NSRect(x: pillX, y: pillY, width: pillW, height: pillH)
+            return pillRect.contains(point) ? super.hitTest(point) : nil
+        }
+    }
+
+    private weak var passthroughView: PassthroughView?
 
     convenience init() {
         let screen = NSScreen.main ?? NSScreen.screens[0]
@@ -26,13 +45,21 @@ final class NotchWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-
         self.init(window: window)
+
+        // PassthroughView is the real contentView; NSHostingView sits inside it.
+        let pv = PassthroughView()
+        pv.wantsLayer = true
+        pv.layer?.backgroundColor = .clear
+        window.contentView = pv
+        passthroughView = pv
 
         let hostingView = NSHostingView(rootView: NotchContainerView(state: notchState).ignoresSafeArea())
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear
-        window.contentView = hostingView
+        hostingView.frame = pv.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        pv.addSubview(hostingView)
 
         setupTrackingArea()
 
@@ -50,36 +77,35 @@ final class NotchWindowController: NSWindowController {
         let sw = screen.frame.width
         let sh = screen.frame.height
         let x = (sw - panelWidth) / 2
-        // Nudge 7 pt above the screen edge so the panel's top corners are
-        // clipped by the physical display bezel, creating the Dynamic Island
-        // "grows from the bezel" look.
-        let y = sh - panelHeight + 7
+        let y = sh - panelHeight + 7   // 7 pt above screen edge → blends into bezel
         return NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
     }
 
     // MARK: - Tracking area
 
     private func setupTrackingArea() {
-        guard let contentView = window?.contentView else { return }
+        guard let pv = passthroughView else { return }
         let area = NSTrackingArea(
-            rect: contentView.bounds,
+            rect: pv.bounds,
             options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
-        contentView.addTrackingArea(area)
+        pv.addTrackingArea(area)
     }
 
     override func mouseEntered(with event: NSEvent) {
         collapseTask?.cancel()
         collapseTask = nil
-        notchState.isExpanded = true
+        notchState.isExpanded    = true
+        passthroughView?.isExpanded = true
     }
 
     override func mouseExited(with event: NSEvent) {
         collapseTask?.cancel()
         let task = DispatchWorkItem { [weak self] in
-            self?.notchState.isExpanded = false
+            self?.notchState.isExpanded    = false
+            self?.passthroughView?.isExpanded = false
         }
         collapseTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay, execute: task)
