@@ -22,7 +22,7 @@ struct NotchContainerView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: state.isExpanded)
+        .animation(.spring(duration: 0.45, bounce: 0.18), value: state.isExpanded)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -1,113 +1,114 @@
 import SwiftUI
 
 enum NotchTab: String, CaseIterable {
-    case media = "Media"
-    case tray  = "Tray"
-    case notes = "Notes"
+    case widgets = "Music"
+    case storage = "Tray"
 
     var icon: String {
         switch self {
-        case .media: return "music.note"
-        case .tray:  return "tray.and.arrow.down"
-        case .notes: return "note.text"
+        case .widgets: return "music.note"
+        case .storage: return "tray.and.arrow.down"
         }
     }
 }
 
 struct ExpandedView: View {
-    @State private var selectedTab: NotchTab = .media
+    @State private var selectedTab: NotchTab = .widgets
 
     var body: some View {
-        ZStack {
-            // Background pill
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: 0x1a1a2e))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(Color(hex: 0x0f3460), lineWidth: 1)
-                )
+        ZStack(alignment: .top) {
+            // Top corners use a small radius (~10 pt) to match the MacBook screen
+            // bezel curvature. The top 7 pt are pushed off-screen so they blend
+            // seamlessly into the physical bezel.
+            UnevenRoundedRectangle(
+                topLeadingRadius: 10,
+                bottomLeadingRadius: 22,
+                bottomTrailingRadius: 22,
+                topTrailingRadius: 10,
+                style: .continuous
+            )
+            .fill(Color.black)
 
             VStack(spacing: 0) {
-                // Tab bar
-                HStack(spacing: 0) {
-                    ForEach(NotchTab.allCases, id: \.self) { tab in
-                        TabButton(
-                            tab: tab,
-                            isSelected: selectedTab == tab,
-                            action: { selectedTab = tab }
-                        )
+                // ── Wing tab bar ──────────────────────────────────────────
+                // Sits in the visible portion of the notch "wings" (the areas
+                // to the left and right of the physical notch camera bump).
+                HStack {
+                    HStack(spacing: 4) {
+                        ForEach(NotchTab.allCases, id: \.self) { tab in
+                            TabPill(
+                                title: tab.rawValue,
+                                icon:  tab.icon,
+                                isSelected: selectedTab == tab
+                            ) { selectedTab = tab }
+                        }
                     }
+                    Spacer()
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 14)
+                // 7 pt overflow is off-screen; add 5 pt more so tabs sit
+                // visually just below the bezel edge.
                 .padding(.top, 12)
+                .frame(height: 38)
 
-                Divider()
-                    .background(Color(hex: 0x0f3460))
-                    .padding(.top, 8)
-
-                // Content
+                // ── Content ──────────────────────────────────────────────
                 Group {
                     switch selectedTab {
-                    case .media:
-                        MediaView()
-                    case .tray:
+                    case .widgets:
+                        HStack(alignment: .top, spacing: 0) {
+                            MediaView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(.leading, 14)
+                                .padding(.trailing, 8)
+
+                            Rectangle()
+                                .fill(Color.white.opacity(0.07))
+                                .frame(width: 1)
+                                .padding(.vertical, 4)
+
+                            NotesView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(.leading, 8)
+                                .padding(.trailing, 14)
+                        }
+
+                    case .storage:
                         FileTrayView()
-                    case .notes:
-                        NotesPlaceholderView()
+                            .padding(.horizontal, 14)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(16)
+                .padding(.bottom, 12)
             }
         }
-        .frame(
-            width: CGFloat(NotchWindowController.expandedWidth),
-            height: CGFloat(NotchWindowController.expandedHeight)
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Tab Button
+// MARK: - Tab Pill
 
-private struct TabButton: View {
-    let tab: NotchTab
+private struct TabPill: View {
+    let title: String
+    let icon:  String
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(tab.rawValue)
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(title)
                     .font(.system(size: 11, weight: .medium))
             }
-            .foregroundColor(isSelected ? Color(hex: 0xe94560) : Color(hex: 0xa8dadc).opacity(0.6))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .foregroundColor(isSelected ? .white : .white.opacity(0.38))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
             .background(
-                isSelected
-                    ? Color(hex: 0xe94560).opacity(0.12)
-                    : Color.clear
+                Capsule(style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.14) : Color.clear)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Notes Placeholder
-
-private struct NotesPlaceholderView: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "note.text")
-                .font(.system(size: 32))
-                .foregroundColor(Color(hex: 0xa8dadc).opacity(0.4))
-            Text("Notes coming soon")
-                .font(.system(size: 13))
-                .foregroundColor(Color(hex: 0xa8dadc).opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

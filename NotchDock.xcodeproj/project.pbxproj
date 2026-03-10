@@ -19,6 +19,7 @@
 		AA000010 /* MediaManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010 /* MediaManager.swift */; };
 		AA000011 /* FileTrayModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* FileTrayModel.swift */; };
 		AA000012 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* Extensions.swift */; };
+		AA000013 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000015 /* NotesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		AB000012 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		AB000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB000014 /* NotchDock.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotchDock.entitlements; sourceTree = "<group>"; };
+		AB000015 /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
 		AC000001 /* NotchDock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NotchDock.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -82,6 +84,7 @@
 				AB000007 /* ExpandedView.swift */,
 				AB000008 /* MediaView.swift */,
 				AB000009 /* FileTrayView.swift */,
+				AB000015 /* NotesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -188,6 +191,7 @@
 				AA000007 /* ExpandedView.swift in Sources */,
 				AA000008 /* MediaView.swift in Sources */,
 				AA000009 /* FileTrayView.swift in Sources */,
+				AA000013 /* NotesView.swift in Sources */,
 				AA000010 /* MediaManager.swift in Sources */,
 				AA000011 /* FileTrayModel.swift in Sources */,
 				AA000012 /* Extensions.swift in Sources */,
