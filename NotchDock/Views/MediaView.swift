@@ -2,15 +2,14 @@ import SwiftUI
 import AppKit
 
 struct MediaView: View {
-    @State private var manager = MediaManager()
+    // Shared instance injected by NotchContainerView
+    @Environment(MediaManager.self) private var manager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                // Artwork
                 artworkView
 
-                // Track info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(manager.title ?? "Nothing Playing")
                         .font(.system(size: 12, weight: .semibold))
@@ -33,7 +32,6 @@ struct MediaView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // Playback controls
             HStack(spacing: 16) {
                 Spacer()
                 MediaControlButton(icon: "backward.fill") {
@@ -48,8 +46,6 @@ struct MediaView: View {
                 Spacer()
             }
         }
-        .onAppear  { manager.startObserving() }
-        .onDisappear { manager.stopObserving() }
     }
 
     @ViewBuilder

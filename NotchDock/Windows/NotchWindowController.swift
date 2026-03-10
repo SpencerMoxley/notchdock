@@ -4,7 +4,7 @@ import SwiftUI
 final class NotchWindowController: NSWindowController {
 
     // Window is always this size — it never resizes on hover.
-    static let panelWidth:  CGFloat = 620
+    static let panelWidth:  CGFloat = 480
     static let panelHeight: CGFloat = 182
 
     // Visual pill size (used by CollapsedView)

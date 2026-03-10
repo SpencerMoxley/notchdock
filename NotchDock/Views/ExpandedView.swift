@@ -16,70 +16,55 @@ struct ExpandedView: View {
     @State private var selectedTab: NotchTab = .widgets
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // Top corners use a small radius (~10 pt) to match the MacBook screen
-            // bezel curvature. The top 7 pt are pushed off-screen so they blend
-            // seamlessly into the physical bezel.
-            UnevenRoundedRectangle(
-                topLeadingRadius: 10,
-                bottomLeadingRadius: 22,
-                bottomTrailingRadius: 22,
-                topTrailingRadius: 10,
-                style: .continuous
-            )
-            .fill(Color.black)
+        VStack(spacing: 0) {
 
-            VStack(spacing: 0) {
-                // ── Wing tab bar ──────────────────────────────────────────
-                // Sits in the visible portion of the notch "wings" (the areas
-                // to the left and right of the physical notch camera bump).
-                HStack {
-                    HStack(spacing: 4) {
-                        ForEach(NotchTab.allCases, id: \.self) { tab in
-                            TabPill(
-                                title: tab.rawValue,
-                                icon:  tab.icon,
-                                isSelected: selectedTab == tab
-                            ) { selectedTab = tab }
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                // 7 pt overflow is off-screen; add 5 pt more so tabs sit
-                // visually just below the bezel edge.
-                .padding(.top, 12)
-                .frame(height: 38)
-
-                // ── Content ──────────────────────────────────────────────
-                Group {
-                    switch selectedTab {
-                    case .widgets:
-                        HStack(alignment: .top, spacing: 0) {
-                            MediaView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.leading, 14)
-                                .padding(.trailing, 8)
-
-                            Rectangle()
-                                .fill(Color.white.opacity(0.07))
-                                .frame(width: 1)
-                                .padding(.vertical, 4)
-
-                            NotesView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.leading, 8)
-                                .padding(.trailing, 14)
-                        }
-
-                    case .storage:
-                        FileTrayView()
-                            .padding(.horizontal, 14)
+            // ── Tab bar (lives in the notch wing area) ───────────────────
+            HStack {
+                HStack(spacing: 4) {
+                    ForEach(NotchTab.allCases, id: \.self) { tab in
+                        TabPill(
+                            title: tab.rawValue,
+                            icon:  tab.icon,
+                            isSelected: selectedTab == tab
+                        ) { selectedTab = tab }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.bottom, 12)
+                Spacer()
             }
+            .padding(.horizontal, 14)
+            // Window is pushed 7 pt off-screen at top; add 12 pt more so
+            // pills sit comfortably below the visible bezel edge.
+            .padding(.top, 12)
+            .frame(height: 38)
+
+            // ── Content ──────────────────────────────────────────────────
+            Group {
+                switch selectedTab {
+                case .widgets:
+                    HStack(alignment: .top, spacing: 0) {
+                        MediaView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.leading, 14)
+                            .padding(.trailing, 8)
+
+                        Rectangle()
+                            .fill(Color.white.opacity(0.07))
+                            .frame(width: 1)
+                            .padding(.vertical, 4)
+
+                        NotesView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.leading, 8)
+                            .padding(.trailing, 14)
+                    }
+
+                case .storage:
+                    FileTrayView()
+                        .padding(.horizontal, 14)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
