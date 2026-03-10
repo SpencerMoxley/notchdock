@@ -1,46 +1,53 @@
 import SwiftUI
 
-/// Shared expand/collapse state driven by NotchWindowController.
 @Observable
 final class NotchState {
-    var isExpanded: Bool = false
+    enum DisplayState { case collapsed, hovered, expanded }
+
+    var display: DisplayState = .collapsed
+
+    var isExpanded: Bool { display == .expanded }
+
+    /// Progress fed into NotchExpansionShape.
+    /// 0 = pill · 0.04 = hover nudge · 1 = full panel
+    var expansionProgress: CGFloat {
+        switch display {
+        case .collapsed: return 0
+        case .hovered:   return 0.04
+        case .expanded:  return 1
+        }
+    }
 }
 
 struct NotchContainerView: View {
     var state: NotchState
 
-    // Single MediaManager instance shared down to MediaView and the collapsed pill
     @State private var media = MediaManager()
 
     var body: some View {
         ZStack(alignment: .top) {
 
-            // ── Expanded panel ───────────────────────────────────────────
-            // Always in the hierarchy; the clip shape handles visibility.
+            // Expanded panel — always in hierarchy, clip handles visibility
             ExpandedView()
                 .opacity(state.isExpanded ? 1 : 0)
                 .allowsHitTesting(state.isExpanded)
 
-            // ── Collapsed pill album-art indicator ───────────────────────
-            // Shows the current track artwork as a tiny thumbnail inside
-            // the pill when something is playing and the panel is collapsed.
+            // Album-art thumbnail visible in pill when a track is playing
             if let artwork = media.artwork {
                 Image(nsImage: artwork)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 20, height: 20)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    // Centre vertically in the 32 pt pill; top 7 pt are behind
-                    // the bezel, so visible centre ≈ padding 13 pt from window top.
                     .padding(.top, 13)
                     .opacity(state.isExpanded ? 0 : 1)
             }
         }
-        // Black background — the clip shape cuts it to the correct pill/panel outline
         .background(Color.black)
-        .clipShape(NotchExpansionShape(progress: state.isExpanded ? 1 : 0))
-        // Spring drives both the clip-shape morph AND the opacity fade simultaneously
-        .animation(.spring(duration: 0.45, bounce: 0.25), value: state.isExpanded)
+        .clipShape(NotchExpansionShape(progress: state.expansionProgress))
+        // Single spring drives all three state transitions.
+        // Short duration keeps hover nudge snappy; bounce gives expand its pop.
+        .animation(.spring(duration: 0.3, bounce: 0.18), value: state.display)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .environment(media)
         .onAppear  { media.startObserving() }
