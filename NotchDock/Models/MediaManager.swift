@@ -41,6 +41,7 @@ final class MediaManager {
     private var handle: UnsafeMutableRawPointer?
     private var nowPlayingInfoObserver: NSObjectProtocol?
     private var isPlayingObserver:      NSObjectProtocol?
+    private var pollTimer:              Timer?
 
     private var fnGetInfo:    MRMediaRemoteGetNowPlayingInfoFn?
     private var fnIsPlaying:  MRMediaRemoteGetNowPlayingApplicationIsPlayingFn?
@@ -56,9 +57,17 @@ final class MediaManager {
         // First fetch — may return empty if MediaRemote hasn't warmed up yet.
         refresh()
 
-        // Retry after a short delay; the first call often returns empty on launch
-        // even when a track is actively playing.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        // Cascading retries — MediaRemote finishes its internal setup asynchronously;
+        // later retries catch state that wasn't available immediately after registration.
+        for delay in [0.5, 1.5, 4.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.refresh()
+            }
+        }
+
+        // Permanent 5s poll — keeps state in sync when notifications don't fire
+        // (common on macOS 14/15 when the playing app doesn't change).
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.refresh()
         }
 
@@ -70,8 +79,7 @@ final class MediaManager {
             self?.refresh()
         }
 
-        // Fires when playback starts or stops — also re-fetch info since
-        // the playing app may have changed.
+        // Fires when playback starts or stops
         let playingName = Notification.Name("kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification")
         isPlayingObserver = center.addObserver(forName: playingName, object: nil, queue: .main) { [weak self] _ in
             self?.refresh()
@@ -79,6 +87,8 @@ final class MediaManager {
     }
 
     func stopObserving() {
+        pollTimer?.invalidate()
+        pollTimer = nil
         if let obs = nowPlayingInfoObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = isPlayingObserver      { NotificationCenter.default.removeObserver(obs) }
         nowPlayingInfoObserver = nil
@@ -89,6 +99,10 @@ final class MediaManager {
 
     func sendCommand(_ command: MediaCommand) {
         _ = fnSendCommand?(command.rawValue, nil)
+        // Notification doesn't always fire for self-triggered changes; force a refresh.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.refresh()
+        }
     }
 
     // MARK: - Private
@@ -109,9 +123,6 @@ final class MediaManager {
         fnGetInfo?(DispatchQueue.main) { [weak self] info in
             self?.updateNowPlaying(from: info)
         }
-        fnIsPlaying?(DispatchQueue.main) { [weak self] playing in
-            self?.isPlaying = playing
-        }
     }
 
     private func updateNowPlaying(from info: [String: Any]) {
@@ -123,6 +134,17 @@ final class MediaManager {
             artwork = NSImage(data: data)
         } else {
             artwork = nil
+        }
+
+        // Derive isPlaying from PlaybackRate (more reliable on macOS 14/15 than the
+        // separate MRMediaRemoteGetNowPlayingApplicationIsPlaying function).
+        if let rate = info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double {
+            isPlaying = rate > 0
+        } else {
+            // PlaybackRate key absent — fall back to the dedicated function.
+            fnIsPlaying?(DispatchQueue.main) { [weak self] playing in
+                self?.isPlaying = playing
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ final class NotchState {
     var expansionProgress: CGFloat {
         switch display {
         case .collapsed: return 0
-        case .hovered:   return 0.04
+        case .hovered:   return 0.03
         case .expanded:  return 1
         }
     }
